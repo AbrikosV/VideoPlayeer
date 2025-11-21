@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Player</title>
+    <style>
+        body {
+            margin: 0;
+            background: #0a0a0a;
+            color: #fff;
+            font-family: sans-serif;
+        }
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .screen {
+            flex: 1;
+            display: none;
+            padding: 20px;
+        }
+        .active {
+            display: block;
+        }
+        .navbar {
+            height: 60px;
+            background: #111;
+            display: flex;
+            border-top: 1px solid #222;
+        }
+        .nav-btn {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+            color: #aaa;
+        }
+        .nav-btn.active {
+            color: #fff;
+        }
+        .setting-row {
+            margin-bottom: 20px;
+        }
+        input[type="file"] {
+            background: #222;
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        video {
+            width: 100%;
+            border-radius: 12px;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <!-- Главный экран -->
+    <div id="view" class="screen active">
+        <h2>Просмотр</h2>
+        <p>Пока что здесь пусто. Добавьте папку в Настройках.</p>
+        <div id="videoList"></div>
+        <video id="player" controls></video>
+    </div>
+
+    <!-- Настройки -->
+    <div id="settings" class="screen">
+        <h2>Настройки</h2>
+        <div class="setting-row">
+            <label>Выберите папку с видео:</label><br /><br />
+            <input id="folderPicker" type="file" webkitdirectory directory multiple />
+        </div>
+    </div>
+
+    <!-- Навигация -->
+    <div class="navbar">
+        <div class="nav-btn active" data-screen="view">Просмотр</div>
+        <div class="nav-btn" data-screen="settings">Настройки</div>
+    </div>
+</div>
+
+<script>
+    const screens = document.querySelectorAll('.screen');
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const folderPicker = document.getElementById('folderPicker');
+    const videoList = document.getElementById('videoList');
+    const player = document.getElementById('player');
+
+    // Переключение вкладок
+    navButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            navButtons.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            screens.forEach(s => s.classList.remove('active'));
+            document.getElementById(btn.dataset.screen).classList.add('active');
+        });
+    });
+
+    // Загрузка видео из папки
+    folderPicker.addEventListener('change', (e) => {
+        videoList.innerHTML = "";
+
+        const files = Array.from(e.target.files).filter(f =>
+            f.name.match(/\.(mp4|mkv|avi|mov|webm)$/i)
+        );
+
+        if (files.length === 0) {
+            videoList.innerHTML = '<p>Видео не найдено.</p>';
+            return;
+        }
+
+        files.forEach(file => {
+            const btn = document.createElement('div');
+            btn.textContent = file.name;
+            btn.style.margin = '10px 0';
+            btn.style.padding = '10px';
+            btn.style.background = '#111';
+            btn.style.borderRadius = '8px';
+            btn.style.cursor = 'pointer';
+
+            btn.addEventListener('click', () => {
+                player.src = URL.createObjectURL(file);
+                player.play();
+            });
+
+            videoList.appendChild(btn);
+        });
+    });
+
+    // Жесты перемотки
+    let startX = 0;
+    let current = 0;
+
+    player.addEventListener('touchstart', e => {
+        startX = e.touches[0].clientX;
+        current = player.currentTime;
+    });
+
+    player.addEventListener('touchmove', e => {
+        const diff = e.touches[0].clientX - startX;
+        player.currentTime = current + diff / 10;
+    });
+// === Расширенные жесты ===
+let tapTimeout = null;
+let lastTap = 0;
+
+player.addEventListener('touchend', e => {
+    const now = Date.now();
+
+    if (now - lastTap < 300) {
+        const x = e.changedTouches[0].clientX;
+        const mid = window.innerWidth / 2;
+
+        if (x < mid) player.currentTime -= 10;
+        else player.currentTime += 10;
+
+        lastTap = 0;
+    } else {
+        lastTap = now;
+    }
+});
+
+// Свайп вверх/вниз — громкость
+let startY = 0;
+let startVolume = 0;
+
+player.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    startVolume = player.volume;
+});
+
+player.addEventListener('touchmove', e => {
+    const dy = startY - e.touches[0].clientY;
+    let newVolume = startVolume + dy / 300;
+    player.volume = Math.min(1, Math.max(0, newVolume));
+});
+
+// === Мини-плеер ===
+const mini = document.createElement('div');
+mini.style.position = 'fixed';
+mini.style.bottom = '70px';
+mini.style.right = '10px';
+mini.style.width = '160px';
+mini.style.height = '90px';
+mini.style.background = '#000';
+mini.style.border = '1px solid #444';
+mini.style.display = 'none';
+mini.style.borderRadius = '8px';
+mini.style.overflow = 'hidden';
+mini.innerHTML = '<video id="miniPlayer" muted></video>';
+document.body.appendChild(mini);
+
+const miniPlayer = document.getElementById('miniPlayer');
+
+window.addEventListener('blur', () => {
+    if (!player.src) return;
+    mini.style.display = 'block';
+    miniPlayer.src = player.src;
+    miniPlayer.currentTime = player.currentTime;
+    miniPlayer.play();
+});
+
+window.addEventListener('focus', () => {
+    mini.style.display = 'none';
+    miniPlayer.pause();
+});
+
+</script>
+</body>
+</html>
